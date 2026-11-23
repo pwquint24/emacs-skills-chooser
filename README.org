@@ -1,10 +1,72 @@
 * Skills Chooser
+
+This allows you to specify, in an org file in your workspace directory,
+what AI skills should be loaded into the directory - addressing the
+common problem of having too many global AI skills most of which are not
+relevant to any one project.
+
+The org file has checkboxes groups of skills and for individual skills within
+those groups. So you can, for example, load all clojure tablecloth skills at
+once.
+
+There is a central directory of skills files (the structure is explained below)
+and from these skills-chooser can create an org file in the top directory of
+the current workspace. This is the function *skills-chooser-update*
+You then edit the org file, and use a second function to make sure your local
+skills directory matches the selection on the org file.
+
 Skills Chooser builds a project's =skills-list.org= from a grouped AI
 skill library. Select skills with ordinary Org checkboxes, then install
-them as absolute symbolic links or as synchronized copies. It targets
-Emacs 29.1 or newer.
+them as absolute symbolic links or as synchronised copies. It targets
+Emacs 29.1 or newer. The installation step is achieved by calling
+*skills-chooser-app*
 
 ** Installation and configuration
+Skills Chooser needs Emacs 29.1 or newer and the =yaml= parser package
+(version 1.2.1 or newer).
+
+*** With straight.el (standard Emacs)
+After bootstrapping straight.el, install the YAML dependency and Skills
+Chooser from its GitHub repository:
+
+#+begin_src elisp
+(straight-use-package 'yaml)
+
+(straight-use-package
+ '(skills-chooser :type git :host github :repo "pwquint24/emacs-skills-chooser"))
+
+(require 'skills-chooser)
+(setq skills-chooser-library-directory "~/ai-skill-library")
+#+end_src
+
+The repository is named =emacs-skills-chooser= while the feature and main
+file are named =skills-chooser=, so the recipe names the repository
+explicitly.
+
+*** With Doom Emacs
+
+You should enable yaml in your init.el file
+
+Doom declares packages in =packages.el=. Add the dependency and the GitHub
+recipe to your =DOOMDIR= (usually =~/.config/doom/= or =~/.doom.d/=), then
+run =doom sync=:
+
+#+begin_src elisp
+;; ~/.config/doom/packages.el
+(package! skills-chooser
+  :recipe (:host github :repo "pwquint24/emacs-skills-chooser"))
+#+end_src
+
+Then configure it in =config.el=:
+
+#+begin_src elisp
+;; ~/.config/doom/config.el
+(use-package! skills-chooser
+  :config
+  (setq skills-chooser-library-directory "~/ai-skill-library"))
+#+end_src
+
+*** Manually
 Install the YAML parser dependency (version 1.2.1 or newer), for example
 with =M-x package-install RET yaml RET=, and put =skills-chooser.el= on
 your =load-path=:
@@ -16,7 +78,7 @@ your =load-path=:
 (setq skills-chooser-library-directory "~/ai-skill-library")
 #+end_src
 
-The available customizations are:
+The available customisations are:
 
 - =skills-chooser-library-directory=: the grouped library root. If it is
   nil, =skills-chooser-update= prompts for it and offers to save the
@@ -26,12 +88,12 @@ The available customizations are:
 - =skills-chooser-target-directory=: the local installation directory,
   default =.agents/skills=, relative to the workspace root.
 
-Both commands use an explicitly supplied root for noninteractive calls.
+Both commands use an explicitly supplied root for non-interactive calls.
 Otherwise they use =project-root= from =project.el=, or
 =default-directory= if no project is found. They display the workspace
 and library before operating.
 
-Skills Chooser uses Org's own parser and serializer (=org-element=) for
+Skills Chooser uses Org's own parser and serialiser (=org-element=) for
 the configuration, and =yaml.el= for front matter. It does not execute
 code from a skill library.
 
