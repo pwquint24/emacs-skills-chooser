@@ -1,0 +1,196 @@
+* Skills Chooser
+Skills Chooser builds a project's =skills-list.org= from a grouped AI
+skill library. Select skills with ordinary Org checkboxes, then install
+them as absolute symbolic links or as synchronized copies. It targets
+Emacs 29.1 or newer.
+
+** Installation and configuration
+Install the YAML parser dependency (version 1.2.1 or newer), for example
+with =M-x package-install RET yaml RET=, and put =skills-chooser.el= on
+your =load-path=:
+
+#+begin_src elisp
+(add-to-list 'load-path "/path/to/skills-chooser")
+(require 'skills-chooser)
+
+(setq skills-chooser-library-directory "~/ai-skill-library")
+#+end_src
+
+The available customizations are:
+
+- =skills-chooser-library-directory=: the grouped library root. If it is
+  nil, =skills-chooser-update= prompts for it and offers to save the
+  choice.
+- =skills-chooser-list-file=: the configuration file, default
+  =skills-list.org=, relative to the workspace root.
+- =skills-chooser-target-directory=: the local installation directory,
+  default =.agents/skills=, relative to the workspace root.
+
+Both commands use an explicitly supplied root for noninteractive calls.
+Otherwise they use =project-root= from =project.el=, or
+=default-directory= if no project is found. They display the workspace
+and library before operating.
+
+Skills Chooser uses Org's own parser and serializer (=org-element=) for
+the configuration, and =yaml.el= for front matter. It does not execute
+code from a skill library.
+
+** Library layout
+Each visible group directory contains visible skill directories, each
+with a readable =SKILL.md=. Only these two directory levels are scanned.
+
+#+begin_src text
+LIBRARY/
+  clojure/
+    clojisr/
+      SKILL.md
+    clojisr-plotting/
+      SKILL.md
+  wolfram/
+    wolframite/
+      SKILL.md
+#+end_src
+
+A skill file starts with YAML front matter on its first line, such as:
+
+#+begin_src markdown
+---
+name: clojisr
+description: >-
+  Call R from Clojure,
+  including Unicode γ and 東京.
+---
+
+Skill documentation and other skill files follow here.
+#+end_src
+
+The =name= and =description= must be nonempty strings. Multiline
+descriptions are folded to one line. The YAML =name= is the globally
+unique skill ID, so a refresh can preserve a selection when a skill
+moves to another group or directory. Missing skill files, invalid YAML,
+missing or incorrectly typed fields, and duplicate names are validation
+errors; an invalid inventory never replaces an existing
+=skills-list.org=.
+
+** Commands and workflow
+1. Set the library and run =M-x skills-chooser-update=. This creates or
+   refreshes =skills-list.org=, preserving choices by YAML name and the
+   shared installation method. Descriptions, source paths, and
+   deterministic ordering come from the current library.
+2. Edit skill checkboxes. Toggle the single
+   =Copy skills instead of linking= workspace checkbox if you want
+   copies. Saving before applying is optional.
+3. Run =M-x skills-chooser-apply=. If a buffer visits the list, apply
+   uses its current contents, including unsaved changes, without saving
+   or modifying that buffer. Otherwise it reads the file.
+4. Repeat update and apply after changing selections or the library.
+
+A modified list buffer must be saved before update reads its choices;
+declining that prompt leaves both the buffer and disk file unchanged. A
+successful update atomically replaces the file and reverts a visiting
+buffer. Unchanged inventories generate no timestamp-only changes.
+
+** The generated Org file
+The essential source structure is:
+
+#+begin_src org
+,#+TITLE: Project Skills
+,#+STARTUP: showall
+# Skills Chooser generated configuration; descriptions and order may be regenerated.
+# M-x skills-chooser-update refreshes the inventory; M-x skills-chooser-apply installs selections.
+# Checked means copy; empty or intermediate means link for the whole workspace.
+# Both commands display the current library and workspace paths.
+# Checked group-wide selection includes every current skill in that group.
+
+Current library: [[file:/path/to/library/][skill library]]
+
+- [ ] Copy skills instead of linking (whole workspace)
+
+,* clojure
+- [ ] Install All
+- [X] Call R from Clojure. [[file:/path/to/library/clojure/clojisr/SKILL.md][clojisr]]
+- [ ] Render R plots from Clojure. [[file:/path/to/library/clojure/clojisr-plotting/SKILL.md][clojisr-plotting]]
+#+end_src
+
+The generated comments document the controls. The header also carries a
+clickable descriptive link to the current library. Its target path is
+hidden by descriptive-link rendering, while both commands print the full
+workspace and library paths in their messages.
+
+With descriptive-link display, the skill items and the library link
+appear as:
+
+#+begin_src text
+Current library: skill library
+
+- [X] Call R from Clojure. clojisr
+- [ ] Render R plots from Clojure. clojisr-plotting
+#+end_src
+
+Update enables =org-link-descriptive= only in a visiting list buffer,
+without changing the global default. The =file:= target and =SKILL.md=
+filename remain hidden while the link is still clickable. Use
+=M-x org-toggle-link-display= to inspect the underlying links.
+
+Checkbox meanings are consistent throughout the file:
+
+- A checked skill (=[X]=) is selected. Empty (=[ ]=) and intermediate
+  (=[-]=) skills are unselected; applying removes their currently
+  managed installations.
+- Checked =Install All= selects every current skill in that group,
+  including newly discovered skills on a later refresh. Clear it before
+  choosing a subset. Intermediate =Install All= means selection is
+  controlled by individual skills. It is never inferred merely because
+  every child is checked.
+- The one workspace method applies to all selected skills. Checked means
+  copy; empty or intermediate means link. Refresh normalizes
+  intermediate checkboxes to empty. A missing method in an older
+  hand-written file also means link and is restored by the next update.
+
+** Synchronization and safety
+Skills Chooser records managed destinations in
+=.agents/skills/.skills-chooser-manifest.eld=. This versioned file
+contains only printed Lisp data: stable ID, relative destination name,
+source path, and installation method. It is read without evaluation.
+
+Apply completes preflight validation before making changes:
+
+- Selected sources and their file-link targets must match the fresh
+  validated inventory. If a selected source disappeared or a link is
+  stale, run update.
+- Existing destinations not in the manifest are never overwritten or
+  deleted. The exception is a symlink already pointing to exactly the
+  expected source, which is safely adopted.
+- A managed destination whose type or symlink target differs from its
+  record is a conflict, not permission to delete changed content.
+- Duplicate titles, duplicate method items, malformed entries, invalid
+  manifests, and recursive source/destination arrangements abort
+  installation.
+
+Links point to absolute source directories. Copies reflect added,
+changed, and deleted source files on later applies; identical trees are
+left untouched. Changing the workspace method replaces every selected
+managed destination with the requested type. Deselecting skills removes
+only their managed destinations, including after their sources have
+disappeared and update has omitted them.
+
+Use only the library as the source of edits for managed copies. A stale
+copied tree is replaced as a whole. Removing a managed symlink never
+recursively removes its source, and unrelated user files in the target
+directory are left alone. File lists, skill and manifest writes use safe
+local operations, and an unexpected filesystem error stops with the
+operation and paths to inspect.
+
+** Tests
+Run from this directory, with =yaml.el= on the load path:
+
+#+begin_src sh
+emacs -Q --batch -L /path/to/yaml -L . \
+  -l test/skills-chooser-test.el -f ert-run-tests-batch-and-exit
+#+end_src
+
+The suite covers inventory validation, refresh preservation,
+intermediate checkboxes, unsaved buffers, idempotent links and copies,
+source removal, conflicts, and safe manifests. Its helpers account for
+Org's deliberate first-item =org-element-at-point= behavior without
+changing the behavioral assertions.
